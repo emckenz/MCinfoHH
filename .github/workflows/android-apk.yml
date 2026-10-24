@@ -35,14 +35,44 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Paquets SDK
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install \
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+              ANDROID_HOME="$ANDROID_SDK_ROOT"
+            elif [ -d /usr/local/lib/android/sdk ]; then
+              ANDROID_HOME=/usr/local/lib/android/sdk
+            else
+              ANDROID_HOME="$HOME/android-sdk"
+              mkdir -p "$ANDROID_HOME/cmdline-tools"
+              curl -fsSL -o /tmp/commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+              unzip -q /tmp/commandlinetools.zip -d "$ANDROID_HOME/cmdline-tools"
+              mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+            fi
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          toolbin=""
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            toolbin="$ANDROID_HOME/cmdline-tools/latest/bin"
+          else
+            found="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+            if [ -n "$found" ]; then
+              toolbin="$(dirname "$found")"
+            fi
+          fi
+          if [ -z "$toolbin" ]; then
+            echo "sdkmanager introuvable sous $ANDROID_HOME" >&2
+            ls -la "$ANDROID_HOME" >&2 || true
+            exit 1
+          fi
+          echo "$toolbin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          export PATH="$toolbin:$PATH"
+          set +o pipefail
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          set -o pipefail
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
             "platform-tools" \
             "platforms;android-37.0" \
             "build-tools;37.0.0" \
@@ -81,7 +111,11 @@ jobs:
         run: |
           set -euo pipefail
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
-          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          if grep -q '^org.gradle.jvmargs=' gradle.properties; then
+            sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          else
+            printf '\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\n' >> gradle.properties
+          fi
           chmod +x gradlew
           ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/maison-fold-debug.apk"
