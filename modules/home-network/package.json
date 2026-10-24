@@ -1,0 +1,13 @@
+{
+  "name": "home-network",
+  "version": "0.1.0",
+  "description": "Découverte réseau locale, UDP, SSDP, mDNS, BLE et inventaire USB pour Maison.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}
