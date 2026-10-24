@@ -55,17 +55,20 @@ cd android
 
 `arm64-v8a` correspond au Galaxy Z Fold. L’APK sort dans `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Une compilation locale a réussi le 24 octobre 2026 à 10 h 42, heure de Toronto. Le binaire pèse environ 90 Mo. Il n’est pas commité : le dossier `android/` est régénéré par prebuild.
+Une compilation locale a réussi le 24 octobre 2026 à 10 h 42, heure de Toronto. Le binaire pèse environ 90 Mo. Le dossier `android/` reste ignoré par Git : il est régénéré par prebuild.
 
 ## APK depuis GitHub Actions
 
-Le workflow `.github/workflows/android-apk.yml` compile le même APK de débogage, limité à `arm64-v8a`, l’architecture du Galaxy Z Fold. Il part à chaque poussée sur `main` ou sur une branche `cursor/…`, et peut être relancé à la main dans l’onglet Actions, workflow « APK Android ».
+Le workflow `.github/workflows/android-apk.yml` compile le même APK de débogage, limité à `arm64-v8a`, l’architecture du Galaxy Z Fold. Il part à chaque poussée sur `main` ou sur une branche `cursor/…`, et peut être relancé à la main dans l’onglet Actions, workflow « APK Android ». Une poussée qui ne touche que `apk/` ne relance pas la compilation.
 
-1. Ouvrir l’exécution terminée avec succès.
-2. Télécharger l’artefact `maison-fold-debug`.
-3. Décompresser l’archive : elle contient `maison-fold-debug.apk`.
-4. Copier ce fichier sur le téléphone.
-5. Autoriser l’installation d’applications de cette provenance, puis ouvrir l’APK. Le paquet est `com.mcinfohh.maison`.
+À la fin d’une exécution réussie, le workflow commit le fichier dans la même branche :
+
+- `apk/maison-fold-debug.apk`
+- `apk/maison-fold-debug.sha256`
+
+Sur le poste, `git pull` récupère cet APK. Le copier sur le téléphone, autoriser l’installation depuis cette provenance, puis l’ouvrir. Le paquet est `com.mcinfohh.maison`. L’empreinte SHA-256 du fichier est dans `apk/maison-fold-debug.sha256`.
+
+L’artefact Actions `maison-fold-debug` reste publié en plus, pour trente jours. Le binaire fait environ 90 Mo, sous la limite GitHub de 100 Mo. Chaque publication nouvelle reste dans l’historique Git.
 
 Sans le secret `MAISON_KEYSTORE_BASE64`, chaque exécution signe l’APK avec une clé de débogage nouvelle. Android refuse alors d’écraser l’installation précédente : il faut désinstaller Maison, puis installer le nouvel APK. Les données locales de l’application partent avec la désinstallation.
 
