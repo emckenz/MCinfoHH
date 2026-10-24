@@ -6,9 +6,11 @@ on:
     branches:
       - main
       - cursor/**
+    paths-ignore:
+      - apk/**
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: apk-${{ github.ref }}
@@ -22,6 +24,9 @@ jobs:
     steps:
       - name: Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Node.js
         uses: actions/setup-node@v4
@@ -128,3 +133,27 @@ jobs:
           path: maison-fold-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Déposer l’APK dans le dépôt
+        run: |
+          set -euo pipefail
+          mkdir -p apk
+          cp "$GITHUB_WORKSPACE/maison-fold-debug.apk" apk/maison-fold-debug.apk
+          sha256sum apk/maison-fold-debug.apk | tee apk/maison-fold-debug.sha256
+          bytes=$(wc -c < apk/maison-fold-debug.apk)
+          echo "Taille : ${bytes} octets"
+          if [ "$bytes" -ge 100000000 ]; then
+            echo "GitHub refuse les fichiers d’au moins 100 Mo (${bytes} octets)." >&2
+            exit 1
+          fi
+          git add -- apk/maison-fold-debug.apk apk/maison-fold-debug.sha256
+          if git diff --cached --quiet; then
+            echo "L’APK déjà dans le dépôt est identique."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Publie l’APK Fold [skip ci]"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
