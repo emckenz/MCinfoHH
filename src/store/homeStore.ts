@@ -1,11 +1,12 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 
 import { HomeRepository } from '../data/repository';
 import { createSecretStore, gatewaySecretKey, SecretStore } from '../data/secrets';
 import { openExpoDatabase } from '../data/expoDatabase';
 import { SIMULATED_DEVICES, SIMULATED_GROUPS, SIMULATED_ROOMS } from '../demo/fixtures';
-import { errorMessage } from '../domain/errors';
-import { DeviceError } from '../domain/errors';
+import { DeviceError, errorMessage } from '../domain/errors';
+import { assertLanHost } from '../domain/localAddress';
 import { Command, Device, DiscoveryHit, Gateway, Group, Room } from '../domain/types';
 import { withMembership } from '../services/DeviceRegistry';
 import { DeviceRegistry } from '../services/DeviceRegistry';
@@ -18,6 +19,7 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
 interface HomeState {
   ready: boolean;
   bootError?: string;
+  actionError?: string;
   devices: Device[];
   rooms: Room[];
   groups: Group[];
@@ -133,20 +135,27 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   },
 
   async setDemoMode(enabled) {
-    if (!repository) return;
-    if (enabled) {
-      for (const room of SIMULATED_ROOMS) await repository.saveRoom(room);
-      for (const group of SIMULATED_GROUPS) await repository.saveGroup(group);
-      for (const device of SIMULATED_DEVICES) await repository.saveDevice(device);
-    } else {
-      await repository.deleteSimulated();
+    if (!repository) {
+      set({ actionError: 'La base locale n’est pas ouverte. Rechargez l’application.' });
+      return;
     }
-    await repository.setPreference('demoMode', enabled);
-    const snapshot = await repository.load();
-    rooms = snapshot.rooms;
-    groups = snapshot.groups;
-    registry.replace(snapshot.devices);
-    publish(set, { demoMode: enabled });
+    try {
+      if (enabled) {
+        for (const room of SIMULATED_ROOMS) await repository.saveRoom(room);
+        for (const group of SIMULATED_GROUPS) await repository.saveGroup(group);
+        for (const device of SIMULATED_DEVICES) await repository.saveDevice(device);
+      } else {
+        await repository.deleteSimulated();
+      }
+      await repository.setPreference('demoMode', enabled);
+      const snapshot = await repository.load();
+      rooms = snapshot.rooms;
+      groups = snapshot.groups;
+      registry.replace(snapshot.devices);
+      publish(set, { demoMode: enabled, actionError: undefined });
+    } catch (error) {
+      set({ actionError: errorMessage(error) });
+    }
   },
 
   selectDevice(id) {
@@ -242,8 +251,9 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   },
 
   async saveRoom(room) {
+    if (!repository) throw new DeviceError('La base locale n’est pas ouverte.', 'unavailable');
+    await repository.saveRoom(room);
     rooms = rooms.some((item) => item.id === room.id) ? rooms.map((item) => (item.id === room.id ? room : item)) : [...rooms, room];
-    await repository?.saveRoom(room);
     publish(set);
   },
 
@@ -256,8 +266,9 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   },
 
   async saveGroup(group) {
+    if (!repository) throw new DeviceError('La base locale n’est pas ouverte.', 'unavailable');
+    await repository.saveGroup(group);
     groups = groups.some((item) => item.id === group.id) ? groups.map((item) => (item.id === group.id ? group : item)) : [...groups, group];
-    await repository?.saveGroup(group);
     publish(set);
   },
 
@@ -279,7 +290,10 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   },
 
   async discover(scope, options = {}) {
-    if (!services) return;
+    if (!services) {
+      set({ discoveryError: 'La découverte n’est pas prête. Rechargez l’application.' });
+      return;
+    }
     set({ discovering: true, discoveryError: undefined, discovery: scope === 'manual' ? get().discovery : [] });
     try {
       const gateway = gateways.find((item) => item.id === options.gatewayId);
@@ -288,14 +302,23 @@ export const useHomeStore = create<HomeState>((set, get) => ({
         ipAddress: options.ipAddress,
         model: options.model,
       });
-      set({ discovery: hits, discovering: false });
+      const discoveryError = hits.length === 0
+        ? Platform.OS === 'web'
+          ? 'Aucun appareil annoncé. Cette recherche exige le development build Android.'
+          : 'Aucun appareil annoncé sur le réseau local.'
+        : undefined;
+      set({ discovery: hits, discovering: false, discoveryError });
     } catch (error) {
       set({ discovering: false, discoveryError: errorMessage(error) });
     }
   },
 
   async saveGateway(input) {
-    if (!repository || !secrets) return;
+    if (!repository || !secrets) throw new DeviceError('La base locale n’est pas ouverte.', 'unavailable');
+    assertLanHost(input.address);
+    if (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
+      throw new DeviceError('Port invalide.', 'protocol');
+    }
     const id = input.id ?? `gateway-${Math.random().toString(36).slice(2, 10)}`;
     const secretRef = gatewaySecretKey(id);
     if (input.secret) await secrets.set(secretRef, input.secret);
@@ -320,6 +343,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
   async connectGateway(gatewayId) {
     const gateway = gateways.find((item) => item.id === gatewayId);
     if (!gateway || !services || !secrets || !repository) return;
+    assertLanHost(gateway.address);
     try {
       const secret = gateway.secretRef ? await secrets.get(gateway.secretRef) : '';
       await services.gateways.connect(gateway, secret ?? '');

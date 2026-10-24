@@ -16,6 +16,7 @@ export default function SettingsScreen() {
   const setTheme = useHomeStore((state) => state.setTheme);
   const demoMode = useHomeStore((state) => state.demoMode);
   const setDemoMode = useHomeStore((state) => state.setDemoMode);
+  const actionError = useHomeStore((state) => state.actionError);
   const secretsPersistent = useHomeStore((state) => state.secretsPersistent);
   const gateways = useHomeStore((state) => state.gateways);
   const saveGateway = useHomeStore((state) => state.saveGateway);
@@ -53,10 +54,11 @@ export default function SettingsScreen() {
         <Text style={[styles.heading, { color: palette.ink }]}>Démonstration</Text>
         <Muted>Ajoute des appareils explicitement simulés : KP400, WeMo, Leviton, Maestro et Orléans. Ils ne remplacent pas les appareils réels.</Muted>
         <Switch value={demoMode} onValueChange={(value) => void setDemoMode(value)} />
+        {actionError ? <Banner tone="danger">{actionError}</Banner> : null}
       </Card>
       <Card>
         <Text style={[styles.heading, { color: palette.ink }]}>Passerelle</Text>
-        <Muted>{secretsPersistent ? 'Les secrets sont dans le stockage chiffré Android.' : 'Dans le navigateur, les secrets restent en mémoire le temps de la session et ne sont pas écrits sur disque.'}</Muted>
+        <Muted>{secretsPersistent ? 'Les secrets sont dans le stockage chiffré Android.' : 'Dans le navigateur, la maison et les secrets restent en mémoire le temps de la session. Rien n’est écrit sur disque, et aucune connexion n’est ouverte tant que l’adresse locale n’est pas valide.'}</Muted>
         <Field label="Nom" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
         <View style={styles.row}>
           <ActionButton label="Zigbee2MQTT" emphasis={draft.type === 'zigbee2mqtt'} onPress={() => setDraft({ ...draft, type: 'zigbee2mqtt', port: '8883', tls: true })} />
@@ -74,7 +76,7 @@ export default function SettingsScreen() {
         {draft.type === 'zigbee2mqtt' && !draft.tls ? (
           <Banner tone="warn">MQTT sans TLS n’est acceptable que vers une adresse du réseau local. Le mot de passe circule alors en clair sur le LAN.</Banner>
         ) : null}
-        <ActionButton label="Enregistrer" emphasis onPress={() => void act(() => saveGateway({ ...draft, port: Number(draft.port) || 1883, secret: draft.secret || undefined }))} />
+        <ActionButton label="Enregistrer" emphasis onPress={() => void act(() => saveGateway({ ...draft, port: Number(draft.port), secret: draft.secret || undefined }))} />
         {message ? <Banner tone="info">{message}</Banner> : null}
       </Card>
       {gateways.map((gateway) => (

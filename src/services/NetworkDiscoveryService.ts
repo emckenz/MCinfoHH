@@ -18,7 +18,13 @@ export class NetworkDiscoveryService {
 
   async discoverLocal(): Promise<DiscoveryHit[]> {
     const results = await Promise.allSettled([this.tplink.discover(), this.wemo.discover(), this.matter.discover()]);
-    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const hits = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (hits.length === 0 && rejected.length === results.length) {
+      const reason = rejected[0].reason;
+      throw reason instanceof Error ? reason : new Error(String(reason));
+    }
+    return hits;
   }
 
   async discoverMatter(): Promise<DiscoveryHit[]> {

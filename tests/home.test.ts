@@ -148,6 +148,18 @@ describe('découverte et déduplication', () => {
     assert.equal(ble?.connectionStatus, 'detected');
     assert.equal(ble?.capabilities.length, 0);
 
+    const failing = transport();
+    failing.udpCollect = async () => {
+      throw new Error('development build Android');
+    };
+    failing.ssdpSearch = async () => {
+      throw new Error('development build Android');
+    };
+    failing.mdnsBrowse = async () => {
+      throw new Error('development build Android');
+    };
+    await assert.rejects(() => createHomeServices(failing).discovery.discover('wifi', () => undefined), /development build Android/);
+
     const registry = new DeviceRegistry();
     registry.upsertHit(kasa as DiscoveryHit);
     registry.upsertHit({ ...(kasa as DiscoveryHit), name: 'Autre nom', dedupeKeys: ['aa-bb-cc-dd-ee-ff'] });

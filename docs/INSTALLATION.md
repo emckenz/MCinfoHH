@@ -25,7 +25,7 @@ npm run web
 
 Ouvrir http://127.0.0.1:8081. `metro.config.js` laisse Metro empaqueter le WebAssembly de SQLite. Le script `scripts/dev-web.mjs` ajoute `Cross-Origin-Opener-Policy` et `Cross-Origin-Embedder-Policy` sur le document, ce que le serveur de développement d’Expo SDK 58 n’applique pas à la page d’accueil. Sans ces en-têtes, `SharedArrayBuffer` est absent et la base ne s’ouvre pas. `npx expo start --web` seul ne suffit donc pas pour le navigateur.
 
-Le mode démonstration, dans Réglages, ajoute des appareils nommés « Simulation — ». Ils restent locaux. La recherche Wi-Fi, Bluetooth, Matter et USB affiche une erreur explicite : ces fonctions existent dans le development build Android.
+Le mode démonstration, dans Réglages, ajoute des appareils nommés « Simulation — ». Ils restent locaux. Dans le navigateur, cette maison est gardée en mémoire pour la session : le fichier SQLite du navigateur ne supporte qu’un seul accès et fermait l’onglet. La recherche Wi-Fi, Bluetooth, Matter et USB affiche une erreur explicite en haut de l’écran : ces fonctions existent dans le development build Android.
 
 Les secrets saisis dans le navigateur ne sont pas écrits sur le disque.
 

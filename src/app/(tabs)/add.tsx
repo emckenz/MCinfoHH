@@ -33,6 +33,7 @@ export default function AddScreen() {
       <Title>Ajouter un appareil</Title>
       <Muted>Les résultats apparaissent au fil de la recherche. Un appareil détecté peut rester non commandable.</Muted>
       <Banner tone="info">Un téléphone en Wi-Fi 5 GHz peut joindre un appareil en 2,4 GHz lorsque le routeur relie les deux bandes. La découverte ne prouve pas que l’appareil soit commandable.</Banner>
+      {discoveryError ? <Banner tone="danger">{discoveryError}</Banner> : null}
       {OPTIONS.map((option) => (
         <Card key={option.scope}>
           <Text style={[styles.heading, { color: palette.ink }]}>{option.title}</Text>
@@ -54,7 +55,6 @@ export default function AddScreen() {
         <TextInput value={model} onChangeText={setModel} placeholder="Modèle, par exemple KP400, DW6HD, SMT402" placeholderTextColor={palette.soft} autoCapitalize="characters" style={[styles.input, { color: palette.ink, borderColor: palette.line }]} />
         <ActionButton label="Identifier" onPress={() => void discover('manual', { ipAddress: ipAddress.trim(), model: model.trim() })} />
       </Card>
-      {discoveryError ? <Banner tone="danger">{discoveryError}</Banner> : null}
       {added ? <Banner tone="info">{added}</Banner> : null}
       {discovery.map((hit) => (
         <Card key={hit.id}>
