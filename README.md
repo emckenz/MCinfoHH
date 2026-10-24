@@ -34,4 +34,4 @@ npx expo start --dev-client
 
 Le navigateur sert à parcourir l’interface et le mode démonstration. La découverte Wi-Fi, Bluetooth et USB y est refusée explicitement.
 
-L’installation Android, les permissions et la compilation de l’APK sont décrites dans [docs/INSTALLATION.md](docs/INSTALLATION.md). L’architecture est dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+L’installation Android, les permissions et l’APK produit par GitHub Actions sont décrits dans [docs/INSTALLATION.md](docs/INSTALLATION.md). L’architecture est dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

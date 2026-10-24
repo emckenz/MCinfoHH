@@ -55,7 +55,34 @@ cd android
 
 `arm64-v8a` correspond au Galaxy Z Fold. L’APK sort dans `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Une compilation de cette session a réussi en 6 minutes 4 secondes (24 octobre 2026, 10 h 42, heure de Toronto). Le binaire pèse environ 90 Mo. Il n’est pas commité : le dossier `android/` est régénéré par prebuild, et un APK de cette taille n’a pas sa place dans Git. Relancer la commande ci-dessus le produit à nouveau.
+Une compilation locale a réussi le 24 octobre 2026 à 10 h 42, heure de Toronto. Le binaire pèse environ 90 Mo. Le dossier `android/` reste ignoré par Git : il est régénéré par prebuild.
+
+## APK depuis GitHub Actions
+
+Le workflow `.github/workflows/android-apk.yml` compile le même APK de débogage, limité à `arm64-v8a`, l’architecture du Galaxy Z Fold. Il part à chaque poussée sur `main` ou sur une branche `cursor/…`, et peut être relancé à la main dans l’onglet Actions, workflow « APK Android ». Une poussée qui ne touche que `apk/` ne relance pas la compilation.
+
+À la fin d’une exécution réussie, le workflow commit le fichier dans la même branche :
+
+- `apk/maison-fold-debug.apk`
+- `apk/maison-fold-debug.sha256`
+
+Sur le poste, `git pull` récupère cet APK. Le copier sur le téléphone, autoriser l’installation depuis cette provenance, puis l’ouvrir. Le paquet est `com.mcinfohh.maison`. L’empreinte SHA-256 du fichier est dans `apk/maison-fold-debug.sha256`.
+
+L’artefact Actions `maison-fold-debug` reste publié en plus, pour trente jours. Le binaire fait environ 90 Mo, sous la limite GitHub de 100 Mo. Chaque publication nouvelle reste dans l’historique Git.
+
+Sans le secret `MAISON_KEYSTORE_BASE64`, chaque exécution signe l’APK avec une clé de débogage nouvelle. Android refuse alors d’écraser l’installation précédente : il faut désinstaller Maison, puis installer le nouvel APK. Les données locales de l’application partent avec la désinstallation.
+
+Pour garder la même signature et mettre à jour sans désinstaller, créer une fois un magasin de clés de débogage et le déposer dans les secrets du dépôt :
+
+```bash
+keytool -genkeypair -keystore maison-debug.keystore -alias androiddebugkey \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass android -keypass android \
+  -dname "CN=Maison, OU=Maison, O=Maison, L=Montreal, ST=Quebec, C=CA"
+base64 -w0 maison-debug.keystore
+```
+
+Le secret s’appelle `MAISON_KEYSTORE_BASE64`. Le mot de passe et l’alias doivent rester `android` et `androiddebugkey` : ce sont ceux que Gradle utilise pour une compilation de débogage. Ne pas committer le fichier `.keystore`.
 
 ## Passerelles
 
