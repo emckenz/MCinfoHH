@@ -1,0 +1,96 @@
+name: APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - cursor/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Compiler l’APK Fold
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Code
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Paquets SDK
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+
+      - name: Dépendances
+        run: npm ci
+        env:
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Projet Android
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Signature de débogage stable
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MAISON_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "Pas de secret MAISON_KEYSTORE_BASE64 : Gradle créera une signature de débogage propre à ce run. Une mise à jour exigera de désinstaller l’application."
+            exit 0
+          fi
+          mkdir -p "$HOME/.android"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+          echo "Signature de débogage reprise depuis le secret."
+
+      - name: Compilation
+        working-directory: android
+        run: |
+          set -euo pipefail
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          chmod +x gradlew
+          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/maison-fold-debug.apk"
+          sha256sum "$GITHUB_WORKSPACE/maison-fold-debug.apk"
+
+      - name: Publier l’APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: maison-fold-debug
+          path: maison-fold-debug.apk
+          if-no-files-found: error
+          retention-days: 30
