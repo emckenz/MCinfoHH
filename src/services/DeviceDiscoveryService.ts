@@ -30,6 +30,10 @@ export class DeviceDiscoveryService {
     if (scope === 'manual') push(await this.network.identifyManual(options.ipAddress, options.model));
     return dedupeHits(hits);
   }
+
+  discoverWifiReport(): ReturnType<NetworkDiscoveryService['discoverLocalReport']> {
+    return this.network.discoverLocalReport();
+  }
 }
 
 function dedupeHits(hits: DiscoveryHit[]): DiscoveryHit[] {

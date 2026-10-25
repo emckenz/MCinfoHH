@@ -63,6 +63,7 @@ export default function DevicesScreen() {
             <FilterChip label="Favoris" active={filters.favoritesOnly} onPress={() => setFilters({ ...filters, favoritesOnly: !filters.favoritesOnly })} />
           </View>
           <Muted>{visible.length} affiché{visible.length > 1 ? 's' : ''}</Muted>
+          {devices.length === 0 ? <Muted>Aucun appareil en mémoire. Sur le même Wi-Fi, l’accueil les cherche et les garde sur ce téléphone.</Muted> : null}
         </View>
       }
       renderItem={({ item }) => (

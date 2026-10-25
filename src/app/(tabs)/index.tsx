@@ -15,6 +15,10 @@ export default function HomeScreen() {
   const demoMode = useHomeStore((state) => state.demoMode);
   const executeMany = useHomeStore((state) => state.executeMany);
   const bootError = useHomeStore((state) => state.bootError);
+  const scanWifi = useHomeStore((state) => state.scanWifi);
+  const discovering = useHomeStore((state) => state.discovering);
+  const discoveryError = useHomeStore((state) => state.discoveryError);
+  const recognitionNote = useHomeStore((state) => state.recognitionNote);
   const lights = devices.filter((device) => ['light', 'dimmer', 'switch'].includes(device.type) && isPoweredOn(device));
   const temperatures = devices.filter((device) => device.currentState.currentTemperatureC !== undefined);
   const favorites = devices.filter((device) => device.isFavorite);
@@ -23,9 +27,13 @@ export default function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}>
       <Muted>Maison</Muted>
-      <Title>La maison, localement.</Title>
+      <Title>La maison, sur ce téléphone.</Title>
+      <Banner tone="info">La liste reste dans la mémoire du téléphone. Aucun serveur n’est nécessaire : sur le même Wi-Fi, Maison cherche les prises et les interrupteurs, les reconnaît et les garde.</Banner>
       {demoMode ? <Banner tone="sim">Mode démonstration. Les appareils marqués Simulation ne parlent à aucun réseau.</Banner> : null}
       {bootError ? <Banner tone="danger">{bootError}</Banner> : null}
+      {discoveryError ? <Banner tone="danger">{discoveryError}</Banner> : null}
+      {recognitionNote ? <Banner tone="info">{recognitionNote}</Banner> : null}
+      <ActionButton label={discovering ? 'Recherche sur le Wi-Fi…' : 'Chercher sur ce Wi-Fi'} emphasis disabled={discovering} onPress={() => void scanWifi()} />
       <View style={styles.stats}>
         <Stat label="Appareils" value={String(devices.length)} />
         <Stat label="Connectés" value={String(connected.length)} />
