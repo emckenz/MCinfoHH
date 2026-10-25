@@ -26,6 +26,7 @@ export default function SettingsScreen() {
   const deleteGateway = useHomeStore((state) => state.deleteGateway);
   const inspectUsb = useHomeStore((state) => state.inspectUsb);
   const usbDevices = useHomeStore((state) => state.usbDevices);
+  const [showGateway, setShowGateway] = useState(false);
   const [draft, setDraft] = useState({ name: 'Passerelle', type: 'zigbee2mqtt' as Gateway['type'], address: '', port: '8883', tls: true, baseTopic: 'zigbee2mqtt', username: '', secret: '' });
   const [message, setMessage] = useState<string>();
 
@@ -57,27 +58,33 @@ export default function SettingsScreen() {
         {actionError ? <Banner tone="danger">{actionError}</Banner> : null}
       </Card>
       <Card>
-        <Text style={[styles.heading, { color: palette.ink }]}>Passerelle</Text>
+        <Text style={[styles.heading, { color: palette.ink }]}>Pont local, facultatif</Text>
+        <Muted>Les appareils Wi-Fi sont cherchés par le téléphone. Ce formulaire ne sert que pour un pont Zigbee2MQTT ou Home Assistant déjà présent sur le réseau local. Il n’ouvre aucun accès depuis Internet.</Muted>
         <Muted>{secretsPersistent ? 'Les secrets sont dans le stockage chiffré Android.' : 'Dans le navigateur, la maison et les secrets restent en mémoire le temps de la session. Rien n’est écrit sur disque, et aucune connexion n’est ouverte tant que l’adresse locale n’est pas valide.'}</Muted>
-        <Field label="Nom" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
-        <View style={styles.row}>
-          <ActionButton label="Zigbee2MQTT" emphasis={draft.type === 'zigbee2mqtt'} onPress={() => setDraft({ ...draft, type: 'zigbee2mqtt', port: '8883', tls: true })} />
-          <ActionButton label="Home Assistant" emphasis={draft.type === 'home-assistant'} onPress={() => setDraft({ ...draft, type: 'home-assistant', port: '8123' })} />
-        </View>
-        <Field label="Adresse locale" value={draft.address} onChange={(address) => setDraft({ ...draft, address })} />
-        <Field label="Port" value={draft.port} onChange={(port) => setDraft({ ...draft, port })} />
-        <Field label="Sujet MQTT" value={draft.baseTopic} onChange={(baseTopic) => setDraft({ ...draft, baseTopic })} />
-        <Field label="Utilisateur" value={draft.username} onChange={(username) => setDraft({ ...draft, username })} />
-        <Field label={draft.type === 'home-assistant' ? 'Jeton' : 'Mot de passe'} value={draft.secret} onChange={(secret) => setDraft({ ...draft, secret })} secure />
-        <View style={styles.row}>
-          <Text style={{ color: palette.ink }}>TLS</Text>
-          <Switch value={draft.tls} onValueChange={(tls) => setDraft({ ...draft, tls })} />
-        </View>
-        {draft.type === 'zigbee2mqtt' && !draft.tls ? (
-          <Banner tone="warn">MQTT sans TLS n’est acceptable que vers une adresse du réseau local. Le mot de passe circule alors en clair sur le LAN.</Banner>
+        <ActionButton label={showGateway ? 'Masquer le formulaire' : 'Configurer un pont local'} onPress={() => setShowGateway((value) => !value)} />
+        {showGateway ? (
+          <View style={{ gap: 8 }}>
+            <Field label="Nom" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
+            <View style={styles.row}>
+              <ActionButton label="Zigbee2MQTT" emphasis={draft.type === 'zigbee2mqtt'} onPress={() => setDraft({ ...draft, type: 'zigbee2mqtt', port: '8883', tls: true })} />
+              <ActionButton label="Home Assistant" emphasis={draft.type === 'home-assistant'} onPress={() => setDraft({ ...draft, type: 'home-assistant', port: '8123' })} />
+            </View>
+            <Field label="Adresse locale" value={draft.address} onChange={(address) => setDraft({ ...draft, address })} />
+            <Field label="Port" value={draft.port} onChange={(port) => setDraft({ ...draft, port })} />
+            <Field label="Sujet MQTT" value={draft.baseTopic} onChange={(baseTopic) => setDraft({ ...draft, baseTopic })} />
+            <Field label="Utilisateur" value={draft.username} onChange={(username) => setDraft({ ...draft, username })} />
+            <Field label={draft.type === 'home-assistant' ? 'Jeton' : 'Mot de passe'} value={draft.secret} onChange={(secret) => setDraft({ ...draft, secret })} secure />
+            <View style={styles.row}>
+              <Text style={{ color: palette.ink }}>TLS</Text>
+              <Switch value={draft.tls} onValueChange={(tls) => setDraft({ ...draft, tls })} />
+            </View>
+            {draft.type === 'zigbee2mqtt' && !draft.tls ? (
+              <Banner tone="warn">MQTT sans TLS n’est acceptable que vers une adresse du réseau local. Le mot de passe circule alors en clair sur le LAN.</Banner>
+            ) : null}
+            <ActionButton label="Enregistrer" emphasis onPress={() => void act(() => saveGateway({ ...draft, port: Number(draft.port), secret: draft.secret || undefined }))} />
+            {message ? <Banner tone="info">{message}</Banner> : null}
+          </View>
         ) : null}
-        <ActionButton label="Enregistrer" emphasis onPress={() => void act(() => saveGateway({ ...draft, port: Number(draft.port), secret: draft.secret || undefined }))} />
-        {message ? <Banner tone="info">{message}</Banner> : null}
       </Card>
       {gateways.map((gateway) => (
         <Card key={gateway.id}>

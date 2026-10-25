@@ -3,14 +3,15 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ActionButton, Banner, Card, Muted, StatusPill, Title } from '../../components/primitives';
+import { findDuplicate } from '../../domain/dedupe';
 import { TYPE_LABEL } from '../../domain/types';
 import { DiscoveryScope } from '../../services/DeviceDiscoveryService';
 import { useHomeStore } from '../../store/homeStore';
 import { usePalette } from '../../theme/useTheme';
 
 const OPTIONS: Array<{ scope: DiscoveryScope; title: string; detail: string }> = [
-  { scope: 'auto', title: 'Recherche automatique', detail: 'Kasa, WeMo, Matter, HomeKit et Bluetooth. Pas de balayage de ports.' },
-  { scope: 'wifi', title: 'Wi-Fi', detail: 'Diffusion Kasa, SSDP WeMo et DNS-SD.' },
+  { scope: 'wifi', title: 'Wi-Fi de ce téléphone', detail: 'Kasa et WeMo sont enregistrés sur le téléphone dès qu’ils répondent. Matter et HomeKit sont reconnus, sans commissionnement.' },
+  { scope: 'auto', title: 'Wi-Fi et Bluetooth', detail: 'Ajoute les annonces Bluetooth. Un périphérique vu n’est pas contrôlable pour autant.' },
   { scope: 'bluetooth', title: 'Bluetooth', detail: 'Annonces BLE. Un périphérique vu n’est pas contrôlable.' },
   { scope: 'matter', title: 'Matter', detail: 'Détection seulement. Aucun commissionnement.' },
 ];
@@ -23,7 +24,10 @@ export default function AddScreen() {
   const discovery = useHomeStore((state) => state.discovery);
   const discoveryError = useHomeStore((state) => state.discoveryError);
   const addHit = useHomeStore((state) => state.addHit);
+  const devices = useHomeStore((state) => state.devices);
   const gateways = useHomeStore((state) => state.gateways);
+  const recognitionNote = useHomeStore((state) => state.recognitionNote);
+  const [showGateway, setShowGateway] = useState(false);
   const [ipAddress, setIpAddress] = useState('');
   const [model, setModel] = useState('');
   const [added, setAdded] = useState<string>();
@@ -31,8 +35,9 @@ export default function AddScreen() {
   return (
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 28 }]}>
       <Title>Ajouter un appareil</Title>
-      <Muted>Les résultats apparaissent au fil de la recherche. Un appareil détecté peut rester non commandable.</Muted>
+      <Muted>Le téléphone cherche sur le Wi-Fi auquel il est connecté et garde la liste dans sa mémoire.</Muted>
       <Banner tone="info">Un téléphone en Wi-Fi 5 GHz peut joindre un appareil en 2,4 GHz lorsque le routeur relie les deux bandes. La découverte ne prouve pas que l’appareil soit commandable.</Banner>
+      {recognitionNote ? <Banner tone="info">{recognitionNote}</Banner> : null}
       {discoveryError ? <Banner tone="danger">{discoveryError}</Banner> : null}
       {OPTIONS.map((option) => (
         <Card key={option.scope}>
@@ -42,12 +47,17 @@ export default function AddScreen() {
         </Card>
       ))}
       <Card>
-        <Text style={[styles.heading, { color: palette.ink }]}>Passerelle Zigbee</Text>
-        <Muted>Zigbee2MQTT ou Home Assistant doit déjà être connecté dans les réglages.</Muted>
-        {gateways.map((gateway) => (
-          <ActionButton key={gateway.id} label={`Importer ${gateway.name}`} onPress={() => void discover('gateway', { gatewayId: gateway.id })} />
-        ))}
-        {gateways.length === 0 ? <Muted>Aucune passerelle enregistrée.</Muted> : null}
+        <Text style={[styles.heading, { color: palette.ink }]}>Zigbee, seulement avec un pont déjà chez vous</Text>
+        <Muted>Le téléphone n’a pas de radio Zigbee. Ce pont, s’il est déjà allumé sur le réseau local, n’est pas un serveur à joindre depuis Internet. Le Wi-Fi n’en a pas besoin.</Muted>
+        <ActionButton label={showGateway ? 'Masquer le pont' : 'Afficher le pont local'} onPress={() => setShowGateway((value) => !value)} />
+        {showGateway ? (
+          <View style={{ gap: 8 }}>
+            {gateways.map((gateway) => (
+              <ActionButton key={gateway.id} label={`Importer ${gateway.name}`} onPress={() => void discover('gateway', { gatewayId: gateway.id })} />
+            ))}
+            {gateways.length === 0 ? <Muted>Aucun pont enregistré. L’ajout se fait dans les réglages, et reste facultatif.</Muted> : null}
+          </View>
+        ) : null}
       </Card>
       <Card>
         <Text style={[styles.heading, { color: palette.ink }]}>Ajout manuel</Text>
@@ -64,7 +74,11 @@ export default function AddScreen() {
           </View>
           <Muted>{hit.manufacturer} · {hit.model} · {TYPE_LABEL[hit.type]}</Muted>
           <Muted>{hit.compatibilityNote}</Muted>
-          <ActionButton label="Ajouter à la maison" onPress={() => void addHit(hit).then(() => setAdded(`${hit.name} ajouté.`))} />
+          {findDuplicate(devices, [hit.id, ...hit.dedupeKeys]) ? (
+            <Muted>Déjà dans la liste du téléphone.</Muted>
+          ) : (
+            <ActionButton label="Ajouter à la maison" onPress={() => void addHit(hit).then(() => setAdded(`${hit.name} ajouté.`))} />
+          )}
         </Card>
       ))}
     </ScrollView>

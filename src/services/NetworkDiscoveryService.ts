@@ -16,15 +16,30 @@ export class NetworkDiscoveryService {
     private readonly stelpro: StelproAdapter,
   ) {}
 
-  async discoverLocal(): Promise<DiscoveryHit[]> {
-    const results = await Promise.allSettled([this.tplink.discover(), this.wemo.discover(), this.matter.discover()]);
-    const hits = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
-    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
-    if (hits.length === 0 && rejected.length === results.length) {
-      const reason = rejected[0].reason;
-      throw reason instanceof Error ? reason : new Error(String(reason));
+  async discoverLocalReport(): Promise<{ hits: DiscoveryHit[]; probed: Array<'kasa' | 'wemo' | 'matter'> }> {
+    const jobs: Array<['kasa' | 'wemo' | 'matter', Promise<DiscoveryHit[]>]> = [
+      ['kasa', this.tplink.discover()],
+      ['wemo', this.wemo.discover()],
+      ['matter', this.matter.discover()],
+    ];
+    const settled = await Promise.allSettled(jobs.map(([, promise]) => promise));
+    const hits: DiscoveryHit[] = [];
+    const probed: Array<'kasa' | 'wemo' | 'matter'> = [];
+    settled.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        probed.push(jobs[index][0]);
+        hits.push(...result.value);
+      }
+    });
+    if (probed.length === 0) {
+      const reason = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason;
+      throw reason instanceof Error ? reason : new Error('Découverte locale impossible.');
     }
-    return hits;
+    return { hits, probed };
+  }
+
+  async discoverLocal(): Promise<DiscoveryHit[]> {
+    return (await this.discoverLocalReport()).hits;
   }
 
   async discoverMatter(): Promise<DiscoveryHit[]> {

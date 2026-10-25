@@ -53,20 +53,20 @@ cd android
 ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a
 ```
 
-`arm64-v8a` correspond au Galaxy Z Fold. L’APK sort dans `android/app/build/outputs/apk/debug/app-debug.apk`.
+`arm64-v8a` correspond au Galaxy Z Fold. `assembleDebug` produit un client de développement : au lancement, il demande l’adresse d’un serveur Metro. L’APK à installer sur le téléphone est celui de `assembleRelease`, qui contient l’application et s’ouvre directement.
 
-Une compilation locale a réussi le 24 octobre 2026 à 10 h 42, heure de Toronto. Le binaire pèse environ 90 Mo. Le dossier `android/` reste ignoré par Git : il est régénéré par prebuild.
+Une compilation locale de débogage a réussi le 24 octobre 2026 à 10 h 42, heure de Toronto. Le dossier `android/` reste ignoré par Git : il est régénéré par prebuild.
 
 ## APK depuis GitHub Actions
 
-Le workflow `.github/workflows/android-apk.yml` compile le même APK de débogage, limité à `arm64-v8a`, l’architecture du Galaxy Z Fold. Il part à chaque poussée sur `main` ou sur une branche `cursor/…`, et peut être relancé à la main dans l’onglet Actions, workflow « APK Android ». Une poussée qui ne touche que `apk/` ne relance pas la compilation.
+Le workflow `.github/workflows/android-apk.yml` compile l’APK release `arm64-v8a`. Il embarque le code de Maison : l’application ne demande pas de serveur de développement. Elle cherche les appareils Kasa et WeMo sur le Wi-Fi du téléphone et garde la liste dans la base locale. Il part à chaque poussée sur `main` ou sur une branche `cursor/…`, et peut être relancé à la main dans l’onglet Actions, workflow « APK Android ». Une poussée qui ne touche que `apk/` ne relance pas la compilation.
 
-À la fin d’une exécution réussie, le workflow commit le fichier dans la même branche :
+À la fin d’une exécution réussie, le workflow commit :
 
-- `apk/maison-fold-debug.apk`
-- `apk/maison-fold-debug.sha256`
+- `apk/maison-fold.apk`
+- `apk/maison-fold.sha256`
 
-Sur le poste, `git pull` récupère cet APK. Le copier sur le téléphone, autoriser l’installation depuis cette provenance, puis l’ouvrir. Le paquet est `com.mcinfohh.maison`. L’empreinte SHA-256 du fichier est dans `apk/maison-fold-debug.sha256`.
+L’ancien `apk/maison-fold-debug.apk` est retiré : c’était le client qui proposait de se connecter à un serveur. Sur le téléphone, toucher **View raw** sur `apk/maison-fold.apk` télécharge le fichier. Le paquet est `com.mcinfohh.maison`. Si Android refuse d’écraser l’installation précédente, désinstaller Maison, puis installer ce fichier.
 
 L’artefact Actions `maison-fold-debug` reste publié en plus, pour trente jours. Le binaire fait environ 90 Mo, sous la limite GitHub de 100 Mo. Chaque publication nouvelle reste dans l’historique Git.
 

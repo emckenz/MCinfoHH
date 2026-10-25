@@ -109,7 +109,8 @@ jobs:
           fi
           mkdir -p "$HOME/.android"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
-          echo "Signature de débogage reprise depuis le secret."
+          cp "$HOME/.android/debug.keystore" "$GITHUB_WORKSPACE/android/app/debug.keystore"
+          echo "Signature reprise depuis le secret."
 
       - name: Compilation
         working-directory: android
@@ -122,15 +123,21 @@ jobs:
             printf '\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8\n' >> gradle.properties
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/maison-fold-debug.apk"
-          sha256sum "$GITHUB_WORKSPACE/maison-fold-debug.apk"
+          python3 -c 'from pathlib import Path; p=Path("app/build.gradle"); t=p.read_text(); assert "release {" in t, "Bloc release introuvable"; p.write_text(t.replace("release {", "release {\n            signingConfig signingConfigs.debug", 1)) if t.count("signingConfig signingConfigs.debug") < 2 else None'
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+          if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
+            echo "APK release signé introuvable." >&2
+            find app/build/outputs/apk -type f -name '*.apk' >&2 || true
+            exit 1
+          fi
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/maison-fold.apk"
+          sha256sum "$GITHUB_WORKSPACE/maison-fold.apk"
 
       - name: Publier l’APK
         uses: actions/upload-artifact@v4
         with:
-          name: maison-fold-debug
-          path: maison-fold-debug.apk
+          name: maison-fold
+          path: maison-fold.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -138,15 +145,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p apk
-          cp "$GITHUB_WORKSPACE/maison-fold-debug.apk" apk/maison-fold-debug.apk
-          sha256sum apk/maison-fold-debug.apk | tee apk/maison-fold-debug.sha256
-          bytes=$(wc -c < apk/maison-fold-debug.apk)
+          rm -f apk/maison-fold-debug.apk apk/maison-fold-debug.sha256
+          cp "$GITHUB_WORKSPACE/maison-fold.apk" apk/maison-fold.apk
+          sha256sum apk/maison-fold.apk | tee apk/maison-fold.sha256
+          bytes=$(wc -c < apk/maison-fold.apk)
           echo "Taille : ${bytes} octets"
           if [ "$bytes" -ge 100000000 ]; then
             echo "GitHub refuse les fichiers d’au moins 100 Mo (${bytes} octets)." >&2
             exit 1
           fi
-          git add -- apk/maison-fold-debug.apk apk/maison-fold-debug.sha256
+          git add -A -- apk
           if git diff --cached --quiet; then
             echo "L’APK déjà dans le dépôt est identique."
             exit 0

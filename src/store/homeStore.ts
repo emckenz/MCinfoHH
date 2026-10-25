@@ -12,6 +12,8 @@ import { withMembership } from '../services/DeviceRegistry';
 import { DeviceRegistry } from '../services/DeviceRegistry';
 import { createHomeServices, HomeServices } from '../services/createHomeServices';
 import { DiscoveryScope } from '../services/DeviceDiscoveryService';
+import { requestLanPermissions } from '../services/lanPermissions';
+import { recognitionMessage, recognizeLocalDevices } from '../services/localRecognition';
 import { getTransport } from '../transport/runtime';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -31,6 +33,7 @@ interface HomeState {
   discovery: DiscoveryHit[];
   discovering: boolean;
   discoveryError?: string;
+  recognitionNote?: string;
   usbDevices: Array<Record<string, unknown>>;
   bootstrap: () => Promise<void>;
   setTheme: (theme: ThemeChoice) => Promise<void>;
@@ -51,6 +54,7 @@ interface HomeState {
   deleteGroup: (groupId: string) => Promise<void>;
   reorder: (ids: string[]) => Promise<void>;
   discover: (scope: DiscoveryScope, options?: { gatewayId?: string; ipAddress?: string; model?: string }) => Promise<void>;
+  scanWifi: () => Promise<void>;
   saveGateway: (input: { id?: string; name: string; type: Gateway['type']; address: string; port: number; tls: boolean; baseTopic: string; username?: string; secret?: string }) => Promise<void>;
   connectGateway: (gatewayId: string) => Promise<void>;
   importGateway: (gatewayId: string) => Promise<void>;
@@ -124,6 +128,7 @@ export const useHomeStore = create<HomeState>((set, get) => ({
       const demoMode = snapshot.preferences.demoMode === true;
       const selected = typeof snapshot.preferences.selectedDeviceId === 'string' ? snapshot.preferences.selectedDeviceId : undefined;
       publish(set, { ready: true, theme, demoMode, selectedDeviceId: selected, secretsPersistent: secrets.persistent });
+      if (Platform.OS === 'android' && !demoMode) void get().scanWifi();
     } catch (error) {
       set({ ready: true, bootError: errorMessage(error) });
     }
@@ -308,6 +313,39 @@ export const useHomeStore = create<HomeState>((set, get) => ({
           : 'Aucun appareil annoncé sur le réseau local.'
         : undefined;
       set({ discovery: hits, discovering: false, discoveryError });
+    } catch (error) {
+      set({ discovering: false, discoveryError: errorMessage(error) });
+    }
+  },
+
+  async scanWifi() {
+    if (!services || !repository) {
+      set({ discoveryError: 'La découverte n’est pas prête. Rechargez l’application.' });
+      return;
+    }
+    if (get().demoMode) {
+      set({ discoveryError: 'Le mode démonstration est actif. Désactivez-le pour chercher les appareils réels du Wi-Fi.' });
+      return;
+    }
+    if (get().discovering) return;
+    set({ discovering: true, discoveryError: undefined, recognitionNote: undefined });
+    try {
+      await requestLanPermissions();
+      const report = await services.discovery.discoverWifiReport();
+      const result = recognizeLocalDevices(registry.list(), report.hits, report.probed);
+      registry.replace(result.devices);
+      for (const id of result.seenIds) {
+        const device = registry.get(id);
+        if (!device || (device.protocol !== 'kasa' && device.protocol !== 'wemo')) continue;
+        const connected = await services.connections.reconnect(device, 1);
+        registry.save(connected);
+      }
+      for (const device of registry.list()) await repository.saveDevice(device);
+      publish(set, {
+        discovering: false,
+        discovery: report.hits,
+        recognitionNote: recognitionMessage(result),
+      });
     } catch (error) {
       set({ discovering: false, discoveryError: errorMessage(error) });
     }

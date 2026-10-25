@@ -16,6 +16,7 @@ import { DeviceAdapterRegistry } from '../src/services/DeviceAdapterRegistry';
 import { DeviceCommandService } from '../src/services/DeviceCommandService';
 import { DeviceConnectionManager } from '../src/services/DeviceConnectionManager';
 import { devicesInGroup, DeviceRegistry } from '../src/services/DeviceRegistry';
+import { recognitionMessage, recognizeLocalDevices } from '../src/services/localRecognition';
 import { NetworkTransport } from '../src/transport/types';
 
 const kp400 = {
@@ -370,3 +371,49 @@ class RejectingAdapter implements DeviceAdapter {
 }
 
 void Command;
+
+function hit(partial: Partial<DiscoveryHit>): DiscoveryHit {
+  return {
+    id: 'kasa:ABC',
+    name: 'Prise patio',
+    manufacturer: 'TP-Link',
+    model: 'KP400',
+    type: 'plug',
+    protocol: 'kasa',
+    ipAddress: '192.168.1.20',
+    capabilities: [{ id: 'onOff', kind: 'onOff', writable: true }],
+    connectionStatus: 'compatible',
+    protocolData: { deviceId: 'ABC' },
+    dedupeKeys: ['ABC', 'AA:BB:CC:DD:EE:FF'],
+    adapterId: 'tplink',
+    origin: 'network',
+    compatibilityNote: '',
+    ...partial,
+  };
+}
+
+describe('reconnaissance sur le Wi-Fi', () => {
+  it('enregistre un Kasa nouveau, reconnaît le même appareil et garde le nom choisi', () => {
+    const first = recognizeLocalDevices([], [hit({})], ['kasa', 'wemo', 'matter']);
+    assert.equal(first.added, 1);
+    assert.equal(first.devices[0]?.ipAddress, '192.168.1.20');
+    const renamed = { ...first.devices[0], name: 'Patio', nameLocked: true, connectionStatus: 'connected' as const };
+    const second = recognizeLocalDevices([renamed], [hit({ ipAddress: '192.168.1.30', name: 'Prise patio' })], ['kasa']);
+    assert.equal(second.added, 0);
+    assert.equal(second.recognized, 1);
+    assert.equal(second.devices.length, 1);
+    assert.equal(second.devices[0]?.name, 'Patio');
+    assert.equal(second.devices[0]?.ipAddress, '192.168.1.30');
+  });
+
+  it('marque hors ligne seulement les protocoles qui ont répondu', () => {
+    const saved = device({ id: 'kasa:ABC', protocol: 'kasa', connectionStatus: 'connected', dedupeKeys: ['ABC'] });
+    const matterOnly = recognizeLocalDevices([saved], [hit({ id: 'matter:1', protocol: 'matter', adapterId: 'matter', dedupeKeys: ['matter-1'], name: 'Interrupteur Matter' })], ['matter']);
+    assert.equal(matterOnly.added, 1);
+    assert.equal(matterOnly.devices.find((item) => item.id === 'kasa:ABC')?.connectionStatus, 'connected');
+    const absent = recognizeLocalDevices([saved], [], ['kasa', 'wemo']);
+    assert.equal(absent.offline, 1);
+    assert.equal(absent.devices[0]?.connectionStatus, 'offline');
+    assert.match(recognitionMessage(absent), /hors ligne/);
+  });
+});
